@@ -29,3 +29,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+
+# BDD
+datadump.json
