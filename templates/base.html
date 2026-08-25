@@ -34,6 +34,18 @@
         </div>
     </div>
 
+    <!-- Splash auto-dismiss (inline pour ne pas dépendre de scripts externes) -->
+    <script>
+    (function() {
+        var splash = document.getElementById('splash-screen');
+        if (splash) {
+            setTimeout(function() {
+                splash.classList.add('fade-out');
+                setTimeout(function() { splash.remove(); }, 600);
+            }, 2500);
+        }
+    })();
+    </script>
     <!-- Navbar -->
     <nav class="navbar">
         <div class="nav-container">
@@ -64,8 +76,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
     
-    <!-- Pyodide -->
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <!-- Pyodide (chargé en async pour ne pas bloquer la page) -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js" async></script>
 
     <!-- Custom JS -->
     <script src="{% static 'js/app.js' %}"></script>

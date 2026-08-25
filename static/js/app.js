@@ -1,15 +1,6 @@
 // ============================================
-// SPLASH SCREEN
+// SPLASH SCREEN — handled by inline script in base.html
 // ============================================
-document.addEventListener('DOMContentLoaded', () => {
-    const splash = document.getElementById('splash-screen');
-    if (splash) {
-        setTimeout(() => {
-            splash.classList.add('fade-out');
-            setTimeout(() => splash.remove(), 600);
-        }, 2500);
-    }
-});
 
 // ============================================
 // SCROLL ANIMATIONS (Intersection Observer)
@@ -34,6 +25,22 @@ document.addEventListener('DOMContentLoaded', () => {
 let pyodideInstance = null;
 let pyodideLoading = false;
 
+// Wait for the async Pyodide script to be loaded
+function waitForPyodideScript() {
+    return new Promise((resolve) => {
+        if (typeof loadPyodide !== 'undefined') {
+            resolve();
+            return;
+        }
+        const check = setInterval(() => {
+            if (typeof loadPyodide !== 'undefined') {
+                clearInterval(check);
+                resolve();
+            }
+        }, 200);
+    });
+}
+
 async function loadPyodideInstance() {
     if (pyodideInstance) return pyodideInstance;
     if (pyodideLoading) {
@@ -47,6 +54,7 @@ async function loadPyodideInstance() {
     const statusEl = document.getElementById('pyodide-status');
     if (statusEl) statusEl.textContent = '⏳ Chargement de Python...';
     try {
+        await waitForPyodideScript();
         pyodideInstance = await loadPyodide();
         if (statusEl) statusEl.textContent = '✅ Python est prêt !';
         pyodideLoading = false;
