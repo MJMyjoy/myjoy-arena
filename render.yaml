@@ -1,0 +1,26 @@
+databases:
+  - name: myjoy-arena-db
+    databaseName: myjoy_arena
+    user: myjoy_user
+    plan: free
+
+services:
+  - type: web
+    name: myjoy-arena
+    runtime: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn myjoy_arena.wsgi:application"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: myjoy-arena-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SETTINGS_MODULE
+        value: myjoy_arena.settings

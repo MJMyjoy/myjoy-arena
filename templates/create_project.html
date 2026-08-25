@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="stepper-container">
+    <div class="progress-container">
+        <div class="progress-bar" id="progress-bar"></div>
+        <div class="step-indicators">
+            <div class="step-indicator active">1</div>
+            <div class="step-indicator">2</div>
+            <div class="step-indicator">3</div>
+            <div class="step-indicator">4</div>
+        </div>
+    </div>
+
+    <div class="stepper-content">
+        <!-- Step 1: Identity -->
+        <div class="step-content active" id="step-1">
+            <h2>Qui es-tu ?</h2>
+            <div class="form-group">
+                <label for="author-name">Ton nom ou surnom de codeur</label>
+                <input type="text" id="author-name" placeholder="Ex: PythonNinja99" class="form-input">
+            </div>
+            <div class="step-actions">
+                <button class="btn btn-primary" onclick="goToStep(2)">Suivant ➡️</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Project Info -->
+        <div class="step-content" id="step-2">
+            <h2>Quel est le titre de ton projet ?</h2>
+            <div class="form-group">
+                <label for="project-title">Titre du projet</label>
+                <input type="text" id="project-title" placeholder="Ex: Mon premier jeu de devinette" class="form-input">
+            </div>
+            <div class="step-actions">
+                <button class="btn btn-secondary" onclick="goToStep(1)">⬅️ Précédent</button>
+                <button class="btn btn-primary" onclick="goToStep(3)">Suivant ➡️</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Code Editor -->
+        <div class="step-content" id="step-3">
+            <h2>Place au code !</h2>
+            <p>Écris ton script Python. S'il utilise <code>input()</code>, renseigne les valeurs dans la case en dessous.</p>
+            
+            <div class="editor-container">
+                <textarea id="code-editor"></textarea>
+            </div>
+            
+            <div class="inputs-container">
+                <label for="input-values">Entrées utilisateur (une par ligne) :</label>
+                <textarea id="input-values" class="form-input" placeholder="Valeur pour le premier input()\nValeur pour le deuxième..."></textarea>
+            </div>
+            
+            <div class="editor-actions">
+                <button class="btn btn-success run-btn" id="run-btn" onclick="executeCode()">▶️ Exécuter le code</button>
+                <span id="pyodide-status" class="pyodide-status">⏳ Chargement de Python...</span>
+            </div>
+            
+            <div id="output-area" class="output-area">
+                <div class="output-message info">La sortie de ton code apparaîtra ici.</div>
+            </div>
+            
+            <div class="step-actions">
+                <button class="btn btn-secondary" onclick="goToStep(2)">⬅️ Précédent</button>
+                <button class="btn btn-primary" id="step3-next" onclick="goToStep(4)">Suivant ➡️</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Finalize -->
+        <div class="step-content" id="step-4">
+            <h2>Derniers détails</h2>
+            <div class="form-group">
+                <label for="project-category">Catégorie</label>
+                <select id="project-category" class="form-input">
+                    <option value="">-- Choisis une catégorie --</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}">{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="project-notes">Notes / Explications (optionnel)</label>
+                <textarea id="project-notes" class="form-input" rows="4" placeholder="Explique ton code en quelques mots..."></textarea>
+            </div>
+            
+            <div class="step-actions">
+                <button class="btn btn-secondary" onclick="goToStep(3)">⬅️ Précédent</button>
+                <button class="btn btn-success" id="save-btn" onclick="saveProject()">💾 Enregistrer mon projet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Overlay -->
+<div id="success-overlay" class="overlay">
+    <div class="success-card">
+        <div class="confetti-container"></div>
+        <h2>🎉 Bravo ! Ton projet a été publié !</h2>
+        <p>Tu peux maintenant le partager avec tes amis.</p>
+        <div class="success-actions">
+            <a href="#" class="btn btn-primary view-project-link">👀 Voir le projet</a>
+            <a href="{% url 'projects:home' %}" class="btn btn-secondary">🏠 Retour à l'accueil</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

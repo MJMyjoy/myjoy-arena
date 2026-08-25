@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-content">
+        <h1 class="gradient-text">Bienvenue sur Myjoy Arena</h1>
+        <p class="subtitle">L'arène des apprentis développeurs Python 🐍</p>
+        <p class="description">Crée, partage et exécute tes scripts Python directement dans ton navigateur. Découvre les créations des autres apprentis !</p>
+        <a href="{% url 'projects:create' %}" class="btn btn-primary cta-btn">🚀 Créer un nouveau projet</a>
+    </div>
+    <div class="floating-symbols">
+        <span class="symbol symbol-1">{}</span>
+        <span class="symbol symbol-2">()</span>
+        <span class="symbol symbol-3">[]</span>
+        <span class="symbol symbol-4">&lt;&gt;</span>
+        <span class="symbol symbol-5">#</span>
+    </div>
+</section>
+
+{% if badged_projects %}
+<section class="badged-projects">
+    <h2 class="section-title gold-title">⭐ Projets à la une</h2>
+    <div class="horizontal-scroll">
+        {% for project in badged_projects %}
+        <a href="{% url 'projects:detail' project.pk %}" class="project-card badged animate-on-scroll">
+            <div class="card-header">
+                <span class="badge-icon">⭐</span>
+                <span class="category-tag">{{ project.category.icon }} {{ project.category.name }}</span>
+            </div>
+            <h3>{{ project.title }}</h3>
+            <div class="author-info">
+                <div class="avatar">{{ project.author_name|make_list|first|upper }}</div>
+                <span>Par {{ project.author_name }}</span>
+            </div>
+            <p class="date">{{ project.created_at|date:"d M Y" }}</p>
+            <p class="notes-preview">{{ project.notes|truncatechars:80 }}</p>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<section class="all-projects">
+    <h2 class="section-title">📚 Tous les projets</h2>
+    
+    <div class="filters">
+        <button class="filter-btn active" onclick="filterByCategory('all')">Tous</button>
+        {% for category in categories %}
+        <button class="filter-btn" onclick="filterByCategory('{{ category.slug }}')">{{ category.name }}</button>
+        {% endfor %}
+    </div>
+
+    <div class="projects-grid">
+        {% for project in recent_projects %}
+        <a href="{% url 'projects:detail' project.pk %}" class="project-card animate-on-scroll" data-category="{{ project.category.slug|default:'' }}">
+            <div class="card-header">
+                {% if project.category %}
+                <span class="category-tag">{{ project.category.icon }} {{ project.category.name }}</span>
+                {% endif %}
+            </div>
+            <h3>{{ project.title }}</h3>
+            <div class="author-info">
+                <div class="avatar">{{ project.author_name|make_list|first|upper }}</div>
+                <span>Par {{ project.author_name }}</span>
+            </div>
+            <p class="date">{{ project.created_at|date:"d M Y" }}</p>
+            <p class="notes-preview">{{ project.notes|truncatechars:80 }}</p>
+        </a>
+        {% empty %}
+        <div class="empty-state">
+            <p>Aucun projet pour le moment. Sois le premier à publier ! 🎉</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="learning-resources">
+    <h2 class="section-title">📖 Ressources pour apprendre Python</h2>
+    <div class="resources-grid">
+        <a href="https://openclassrooms.com/fr/courses/7168871-apprenez-les-bases-du-langage-python" target="_blank" class="resource-card animate-on-scroll">
+            <div class="resource-icon">🎓</div>
+            <h3>OpenClassrooms</h3>
+            <p>Apprenez les bases du langage Python</p>
+            <span class="external-link">↗</span>
+        </a>
+        <a href="http://www.france-ioi.org/" target="_blank" class="resource-card animate-on-scroll">
+            <div class="resource-icon">🏆</div>
+            <h3>France IOI</h3>
+            <p>Apprendre à programmer</p>
+            <span class="external-link">↗</span>
+        </a>
+        <a href="https://www.codecademy.com/catalog/language/python" target="_blank" class="resource-card animate-on-scroll">
+            <div class="resource-icon">💻</div>
+            <h3>Codecademy (FR)</h3>
+            <p>Apprendre Python</p>
+            <span class="external-link">↗</span>
+        </a>
+        <a href="https://docs.python.org/fr/3/tutorial/" target="_blank" class="resource-card animate-on-scroll">
+            <div class="resource-icon">📚</div>
+            <h3>Python.org</h3>
+            <p>Documentation FR Officielle</p>
+            <span class="external-link">↗</span>
+        </a>
+        <a href="https://zestedesavoir.com/tutoriels/?tag=python" target="_blank" class="resource-card animate-on-scroll">
+            <div class="resource-icon">🍋</div>
+            <h3>Zeste de Savoir</h3>
+            <p>Tutoriels Python par la communauté</p>
+            <span class="external-link">↗</span>
+        </a>
+    </div>
+
+    <div class="quick-reference animate-on-scroll">
+        <h3>Aide-mémoire rapide</h3>
+        <div class="reference-tabs">
+            <div class="ref-item">
+                <h4>Variables et types</h4>
+                <pre><code>age = 15          # int
+nom = "Alex"      # str
+taille = 1.75     # float
+est_cool = True   # bool</code></pre>
+            </div>
+            <div class="ref-item">
+                <h4>print() et input()</h4>
+                <pre><code>print("Bonjour !")
+nom = input("Comment tu t'appelles ?")</code></pre>
+            </div>
+            <div class="ref-item">
+                <h4>Conditions</h4>
+                <pre><code>if age >= 18:
+    print("Majeur")
+elif age > 0:
+    print("Mineur")
+else:
+    print("Erreur")</code></pre>
+            </div>
+            <div class="ref-item">
+                <h4>Boucles</h4>
+                <pre><code>for i in range(5):
+    print(i)
+    
+while force > 0:
+    force -= 1</code></pre>
+            </div>
+            <div class="ref-item">
+                <h4>Fonctions</h4>
+                <pre><code>def saluer(nom):
+    return "Salut " + nom
+
+print(saluer("Léo"))</code></pre>
+            </div>
+            <div class="ref-item">
+                <h4>Listes & Dicts</h4>
+                <pre><code>amis = ["Léo", "Mia"]
+amis.append("Tom")
+
+joueur = {"nom": "A", "score": 100}
+print(joueur["score"])</code></pre>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

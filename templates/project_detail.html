@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="project-detail-container">
+    <a href="{% url 'projects:home' %}" class="back-link">← Retour à l'accueil</a>
+    
+    <header class="project-header">
+        <h1 class="project-title">{{ project.title }}</h1>
+        
+        {% if project.is_badged %}
+        <div class="badge-indicator">
+            <span class="badge-icon">⭐</span>
+            <span>Projet validé par l'administration</span>
+        </div>
+        {% endif %}
+        
+        <div class="project-meta">
+            <div class="author-info">
+                <div class="avatar">{{ project.author_name|make_list|first|upper }}</div>
+                <span>Par <strong>{{ project.author_name }}</strong></span>
+            </div>
+            {% if project.category %}
+            <span class="category-tag">{{ project.category.icon }} {{ project.category.name }}</span>
+            {% endif %}
+            <span class="date">Publié le {{ project.created_at|date:"d M Y" }}</span>
+        </div>
+    </header>
+    
+    <div class="project-content">
+        <div class="code-section">
+            <div class="section-header">
+                <h2>💻 Code Python</h2>
+                <button class="btn btn-success btn-sm run-btn" id="run-btn" onclick="executeCode()">▶️ Exécuter ce code</button>
+                <span id="pyodide-status" class="pyodide-status">⏳ Chargement de Python...</span>
+            </div>
+            <textarea id="readonly-code">{{ project.code }}</textarea>
+            
+            <div class="inputs-container" style="margin-top: 15px;">
+                <label for="input-values">Entrées pour input() :</label>
+                <textarea id="input-values" class="form-input" placeholder="Remplis si le code demande des saisies..." rows="2"></textarea>
+            </div>
+        </div>
+        
+        <div class="output-section">
+            <h2>Résultat / Sortie</h2>
+            <div id="output-area" class="output-area">
+                {% if project.output %}
+                <div class="output-message success"><pre>{{ project.output }}</pre></div>
+                {% else %}
+                <div class="output-message info">Exécute le code pour voir le résultat.</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if project.notes %}
+        <div class="notes-section card">
+            <h2>📝 Notes de l'auteur</h2>
+            <p>{{ project.notes|linebreaksbr }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

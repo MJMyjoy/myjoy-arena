@@ -1,0 +1,75 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="vapid-key" content="{{ vapid_public_key|default:'' }}">
+    <title>Myjoy Arena</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- CodeMirror 5 CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/monokai.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <!-- Splash Screen -->
+    <div id="splash-screen">
+        <div class="splash-logo">
+            <svg viewBox="0 0 200 200" class="logo-svg">
+                <!-- M letter -->
+                <path class="letter-m" d="M30,170 L30,50 L70,110 L100,50 L100,50 L130,110 L170,50 L170,170" fill="none" stroke="#6C63FF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+                <!-- A letter that writes inside the M -->
+                <path class="letter-a" d="M70,170 L100,90 L130,170 M80,140 L120,140" fill="none" stroke="#00D4AA" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <p class="splash-text">Myjoy Arena</p>
+            <div class="loading-bar"><div class="loading-progress"></div></div>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{% url 'projects:home' %}" class="logo">Myjoy Arena</a>
+            <button class="mobile-toggle" onclick="toggleMobileMenu()">☰</button>
+            <div class="nav-links">
+                <a href="{% url 'projects:home' %}">Accueil</a>
+                <a href="{% url 'projects:create' %}">Créer un projet</a>
+                <button id="notification-bell" class="icon-btn" title="Notifications">🔔</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-content">
+            <p>&copy; {% now "Y" %} Myjoy Arena</p>
+            <p>Fait avec ❤️ pour les futurs développeurs Python</p>
+        </div>
+    </footer>
+
+    <!-- CodeMirror 5 JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+    
+    <!-- Pyodide -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+
+    <!-- Custom JS -->
+    <script src="{% static 'js/app.js' %}"></script>
+    <script src="{% static 'js/notifications.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
