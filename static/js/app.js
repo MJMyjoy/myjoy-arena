@@ -91,7 +91,7 @@ def _custom_input(prompt=''):
         _input_index += 1
         print(prompt + val)
         return val
-    raise EOFError('Pas de valeur d\\'entrée disponible. Utilise le champ "Entrées" pour fournir des valeurs.')
+    raise EOFError("Pas de valeur d'entree disponible. Utilise le champ Entrees pour fournir des valeurs.")
 builtins.input = _custom_input
     `);
     
@@ -283,7 +283,7 @@ async function executeCode() {
     }
     
     if (!code.trim()) {
-        outputArea.innerHTML = '<div class="output-message info">✏️ Écris du code avant de l\\'exécuter !</div>';
+        outputArea.innerHTML = `<div class="output-message info">✏️ Écris du code avant de l'exécuter !</div>`;
         return;
     }
     
@@ -381,7 +381,7 @@ function validateStep(step) {
             const name = document.getElementById('author-name');
             if (!name || !name.value.trim()) {
                 name.classList.add('input-error');
-                showToast('Merci d\\'entrer ton nom ou surnom !', 'warning');
+                showToast("Merci d'entrer ton nom ou surnom !", 'warning');
                 return false;
             }
             name.classList.remove('input-error');
@@ -390,7 +390,7 @@ function validateStep(step) {
             const title = document.getElementById('project-title');
             if (!title || !title.value.trim()) {
                 title.classList.add('input-error');
-                showToast('Donne un titre à ton projet !', 'warning');
+                showToast("Donne un titre à ton projet !", 'warning');
                 return false;
             }
             title.classList.remove('input-error');
