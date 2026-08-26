@@ -43,8 +43,8 @@
 <section class="all-projects">
     <h2 class="section-title">📚 Tous les projets</h2>
     
-    <div class="category-filters">
-        <button class="filter-btn active" onclick="filterByCategory('all', event)">Tout</button>
+    <div class="filters">
+        <button class="filter-btn active" onclick="filterByCategory('all', event)">Tous</button>
         {% for cat in categories %}
         <button class="filter-btn" onclick="filterByCategory('{{ cat.slug }}', event)">
             {{ cat.icon }} {{ cat.name }}
