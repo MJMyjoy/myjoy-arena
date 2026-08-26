@@ -45,6 +45,14 @@ self.onmessage = async function(event) {
                 py.runPython('_input_values = ' + JSON.stringify(inputs) + '\n_input_index = 0');
             }
 
+            // Clear global namespace to prevent variable leaking between runs
+            py.runPython([
+                '_to_keep = {"__name__", "__doc__", "__package__", "__loader__", "__spec__", "__annotations__", "__builtins__", "sys", "StringIO", "builtins", "_input_values", "_input_index", "_custom_input"}',
+                'for _k in list(globals().keys()):',
+                '    if _k not in _to_keep:',
+                '        del globals()[_k]'
+            ].join('\n'));
+
             py.runPython(code);
 
             const stdout = py.runPython('sys.stdout.getvalue()');
