@@ -20,97 +20,96 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================
-// PYODIDE INTEGRATION
+// PYODIDE WEB WORKER INTEGRATION
+// Runs Python in a separate thread to prevent
+// infinite loops from freezing the browser.
 // ============================================
-let pyodideInstance = null;
-let pyodideLoading = false;
+let pyWorker = null;
+let pyWorkerReady = false;
+const EXECUTION_TIMEOUT = 10000; // 10 seconds max
 
-// Wait for the async Pyodide script to be loaded
-function waitForPyodideScript() {
-    return new Promise((resolve) => {
-        if (typeof loadPyodide !== 'undefined') {
-            resolve();
-            return;
+function createWorker() {
+    if (pyWorker) { try { pyWorker.terminate(); } catch(_) {} }
+    pyWorkerReady = false;
+    pyWorker = new Worker('/static/js/pyodide-worker.js');
+    pyWorker.onmessage = function(e) {
+        if (e.data.type === 'ready') {
+            pyWorkerReady = true;
+            const statusEl = document.getElementById('pyodide-status');
+            if (statusEl) statusEl.textContent = '✅ Python est prêt !';
         }
-        const check = setInterval(() => {
-            if (typeof loadPyodide !== 'undefined') {
-                clearInterval(check);
-                resolve();
+    };
+    const statusEl = document.getElementById('pyodide-status');
+    if (statusEl) statusEl.textContent = '⏳ Chargement de Python...';
+}
+
+// Create worker on page load
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('run-btn') || document.getElementById('code-editor') || document.getElementById('readonly-code')) {
+        createWorker();
+    }
+});
+
+function runPythonCode(code) {
+    return new Promise((resolve) => {
+        if (!pyWorker) createWorker();
+
+        const inputArea = document.getElementById('input-values');
+        const inputs = (inputArea && inputArea.value.trim()) ? inputArea.value.split('\n') : [];
+
+        // Set up timeout to kill the worker if it takes too long
+        const timeoutId = setTimeout(() => {
+            pyWorker.terminate();
+            pyWorker = null;
+            pyWorkerReady = false;
+            resolve({
+                success: false,
+                output: '',
+                error: 'TimeoutError: Ton code a mis plus de 10 secondes. Il contient probablement une boucle infinie ou un calcul trop long.'
+            });
+            // Recreate the worker for next execution
+            createWorker();
+        }, EXECUTION_TIMEOUT);
+
+        // Listen for result from worker
+        pyWorker.onmessage = function(e) {
+            if (e.data.type === 'result') {
+                clearTimeout(timeoutId);
+                resolve(e.data);
+            } else if (e.data.type === 'ready') {
+                pyWorkerReady = true;
+                const statusEl = document.getElementById('pyodide-status');
+                if (statusEl) statusEl.textContent = '✅ Python est prêt !';
             }
-        }, 200);
+        };
+
+        pyWorker.onerror = function(e) {
+            clearTimeout(timeoutId);
+            resolve({ success: false, output: '', error: e.message || 'Erreur inconnue dans le worker.' });
+        };
+
+        // Send code to the worker
+        pyWorker.postMessage({ type: 'run', code: code, inputs: inputs });
     });
 }
 
-async function loadPyodideInstance() {
-    if (pyodideInstance) return pyodideInstance;
-    if (pyodideLoading) {
-        // Wait for loading to complete
-        while (pyodideLoading) {
-            await new Promise(r => setTimeout(r, 100));
-        }
-        return pyodideInstance;
+// Stop button handler — kills the worker
+function stopExecution() {
+    if (pyWorker) {
+        pyWorker.terminate();
+        pyWorker = null;
+        pyWorkerReady = false;
     }
-    pyodideLoading = true;
-    const statusEl = document.getElementById('pyodide-status');
-    if (statusEl) statusEl.textContent = '⏳ Chargement de Python...';
-    try {
-        await waitForPyodideScript();
-        pyodideInstance = await loadPyodide();
-        if (statusEl) statusEl.textContent = '✅ Python est prêt !';
-        pyodideLoading = false;
-        return pyodideInstance;
-    } catch (e) {
-        if (statusEl) statusEl.textContent = '❌ Erreur de chargement de Python';
-        pyodideLoading = false;
-        throw e;
+    const outputArea = document.getElementById('output-area');
+    if (outputArea) {
+        outputArea.innerHTML = '<div class="output-message warning">🛑 Exécution interrompue par l\'utilisateur.</div>';
     }
-}
-
-async function runPythonCode(code) {
-    const pyodide = await loadPyodideInstance();
-    
-    // Redirect stdout and stderr
-    pyodide.runPython(`
-import sys
-from io import StringIO
-sys.stdout = StringIO()
-sys.stderr = StringIO()
-    `);
-    
-    // Handle input() by replacing it with a custom function
-    // For now, we'll use a prompt-based approach
-    pyodide.runPython(`
-import builtins
-_original_input = builtins.input
-_input_values = []
-_input_index = 0
-def _custom_input(prompt=''):
-    global _input_index
-    if _input_index < len(_input_values):
-        val = _input_values[_input_index]
-        _input_index += 1
-        print(prompt + val)
-        return val
-    raise EOFError("Pas de valeur d'entree disponible. Utilise le champ Entrees pour fournir des valeurs.")
-builtins.input = _custom_input
-    `);
-    
-    try {
-        // Set input values if provided
-        const inputArea = document.getElementById('input-values');
-        if (inputArea && inputArea.value.trim()) {
-            const inputs = inputArea.value.split('\n');
-            pyodide.runPython(`_input_values = ${JSON.stringify(inputs)}\n_input_index = 0`);
-        }
-        
-        pyodide.runPython(code);
-        const stdout = pyodide.runPython('sys.stdout.getvalue()');
-        const stderr = pyodide.runPython('sys.stderr.getvalue()');
-        return { success: true, output: stdout, error: stderr };
-    } catch (e) {
-        const stderr = pyodide.runPython('sys.stderr.getvalue()');
-        return { success: false, output: '', error: e.message || stderr };
-    }
+    const runBtn = document.getElementById('run-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    if (runBtn) { runBtn.disabled = false; runBtn.textContent = '▶️ Exécuter le code'; }
+    if (stopBtn) stopBtn.style.display = 'none';
+    // Recreate worker for next run
+    createWorker();
 }
 
 // ============================================
@@ -263,6 +262,7 @@ function initCodeEditor() {
 async function executeCode() {
     const outputArea = document.getElementById('output-area');
     const runBtn = document.getElementById('run-btn');
+    const stopBtn = document.getElementById('stop-btn');
     if (!outputArea) return;
     
     let code = '';
@@ -287,9 +287,10 @@ async function executeCode() {
         return;
     }
     
-    // Show loading
-    outputArea.innerHTML = '<div class="output-message loading">⏳ Exécution en cours...</div>';
+    // Show loading + stop button
+    outputArea.innerHTML = '<div class="output-message loading">⏳ Exécution en cours... (max 10 secondes)</div>';
     if (runBtn) { runBtn.disabled = true; runBtn.textContent = '⏳ Exécution...'; }
+    if (stopBtn) stopBtn.style.display = 'inline-block';
     
     try {
         const result = await runPythonCode(code);
@@ -320,6 +321,7 @@ async function executeCode() {
         outputArea.innerHTML = `<div class="output-message error"><div class="error-friendly">${escapeHtml(friendlyError).replace(/\n/g, '<br>')}</div></div>`;
     } finally {
         if (runBtn) { runBtn.disabled = false; runBtn.textContent = '▶️ Exécuter le code'; }
+        if (stopBtn) stopBtn.style.display = 'none';
     }
 }
 
@@ -474,12 +476,12 @@ function createToastContainer() {
 // ============================================
 // CATEGORY FILTER (Home page)
 // ============================================
-function filterByCategory(categorySlug) {
+function filterByCategory(categorySlug, event) {
     const cards = document.querySelectorAll('.project-card');
     const buttons = document.querySelectorAll('.filter-btn');
     
     buttons.forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    if (event) event.target.classList.add('active');
     
     cards.forEach(card => {
         if (categorySlug === 'all' || card.dataset.category === categorySlug) {
@@ -520,8 +522,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // Start loading Pyodide in background on pages that need it
+    // Start loading Pyodide worker in background on pages that need it
     if (document.getElementById('code-editor') || document.getElementById('readonly-code')) {
-        loadPyodideInstance().catch(() => {});
+        createWorker();
     }
 });

@@ -31,6 +31,7 @@
             <div class="section-header">
                 <h2>💻 Code Python</h2>
                 <button class="btn btn-success btn-sm run-btn" id="run-btn" onclick="executeCode()">▶️ Exécuter ce code</button>
+                <button class="btn btn-danger btn-sm stop-btn" id="stop-btn" onclick="stopExecution()" style="display:none;">⏹️ Arrêter</button>
                 <span id="pyodide-status" class="pyodide-status">⏳ Chargement de Python...</span>
             </div>
             <textarea id="readonly-code">{{ project.code }}</textarea>

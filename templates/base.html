@@ -76,9 +76,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
     
-    <!-- Pyodide (chargé en async pour ne pas bloquer la page) -->
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js" async></script>
-
+    <!-- Pyodide est chargé par le Web Worker, pas besoin ici -->
     <!-- Custom JS -->
     <script src="{% static 'js/app.js' %}"></script>
     <script src="{% static 'js/notifications.js' %}"></script>
