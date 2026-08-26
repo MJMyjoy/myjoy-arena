@@ -2,11 +2,6 @@ from django import forms
 from .models import Project
 
 class ProjectForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Définit la valeur initiale du 3ème champ ('code')
-        self.fields['code'].initial = "initial="# Tapez votre code ici ...\n\n# Ceci est un exemple :\nprint("Hello world !")\n"
-
     class Meta:
         model = Project
         fields = ['author_name', 'title', 'code', 'notes', 'category', 'output']
