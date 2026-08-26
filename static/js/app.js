@@ -181,8 +181,8 @@ const ERROR_MESSAGES = {
     },
     'EOFError': {
         pattern: /EOFError/,
-        message: "⌨️ Ton code utilise input() pour demander une saisie. Remplis le champ 'Entrées utilisateur' ci-dessous avec les valeurs attendues (une par ligne) puis relance !",
-    },
+        message: "Ton code utilise input() pour demander une saisie. Remplis le champ ci-dessus avec les valeurs attendues (une par ligne) puis relance !",
+     },
     'OverflowError': {
         pattern: /OverflowError/,
         message: "💥 Dépassement ! Le nombre est trop grand pour être traité. Essaie avec des valeurs plus petites.",
