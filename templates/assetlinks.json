@@ -1,0 +1,11 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.havila.myjoyarena",
+    "sha256_cert_fingerprints":
+    ["A2:8B:E6:3C:91:E6:53:5E:0D:F6:F0:CC:A9:54:86:9C:7E:95:3B:0C:DA:FE:DA:E1:15:2A:A2:3C:E2:66:3F:04"]
+  }
+}] 
+
+

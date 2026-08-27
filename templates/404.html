@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-content">
+        <h1 class="gradient-text">Bienvenue sur Myjoy Arena</h1>
+        <p class="subtitle">L'arène des apprentis développeurs Python 🐍</p>
+        <p class="description">Oups ! Cette page ne mène à rien !</p>
+        <a href="{% url 'projects:home' %}" class="btn btn-primary cta-btn">🚀 Revenir à Myjoy Arena !</a>
+    </div>
+    <div class="floating-symbols">
+        <span class="symbol symbol-1">{}</span>
+        <span class="symbol symbol-2">()</span>
+        <span class="symbol symbol-3">[]</span>
+        <span class="symbol symbol-4">&lt;&gt;</span>
+        <span class="symbol symbol-5">#</span>
+    </div>
+</section>
+
+{% endblock %}

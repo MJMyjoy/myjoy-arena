@@ -16,7 +16,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-secret-key-for-dev')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+# On force le mode production pour voir les pages 404/500 personnalisées
+DEBUG = False
+
+# On autorise à la fois ton ordinateur (local) et Render (distant)
+# Attention : pas de "http://" ni de "/" à la fin de onrender.com
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'myjoy-arena.onrender.com']
+
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
