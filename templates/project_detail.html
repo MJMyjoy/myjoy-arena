@@ -59,6 +59,36 @@
             <p>{{ project.notes|linebreaksbr }}</p>
         </div>
         {% endif %}
+
+        
+        <!-- Le bouton Partager -->
+        <button id="btn-partager" class="btn btn-primary">Partager ce projet</button>
+
+        <!-- Le script JavaScript de ce bouton -->
+        <script>
+        document.getElementById('btn-partager').addEventListener('click', async () => {
+            // On récupère l'URL générée par Django
+            const shareUrl = "{{ request.build_absolute_uri }}";
+            // Vous pouvez aussi rendre le titre dynamique, par exemple {{ article.titre|escapejs }}
+            const shareTitle = "Découvrez ce projet fascinant sur Myjoy Arena !"; 
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: shareTitle,
+                        url: shareUrl
+                    });
+                    console.log('Partage réussi !');
+                } catch (err) {
+                    console.error('Erreur lors du partage:', err);
+                }
+            } else {
+                // Fallback pour les vieux navigateurs de bureau
+                prompt("Copiez ce lien pour le partager :", shareUrl);
+            }
+        });
+        </script>
+
     </div>
 </div>
 {% endblock %}
