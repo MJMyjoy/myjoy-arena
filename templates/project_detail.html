@@ -66,29 +66,38 @@
             <button id="btn-partager" class="btn btn-primary">Partager ce projet</button>
         </div>
         <!-- Le script JavaScript de ce bouton -->
+
         <script>
         document.getElementById('btn-partager').addEventListener('click', async () => {
-            // On récupère l'URL générée par Django
             const shareUrl = "{{ request.build_absolute_uri }}";
-            // Vous pouvez aussi rendre le titre dynamique, par exemple {{ article.titre|escapejs }}
-            const shareTitle = "Découvrez ce projet fascinant sur Myjoy Arena !"; 
+            const shareTitle = "Découvrez cette page !"; 
+            const shareText = "Voici un lien intéressant :"; // Vous pouvez le laisser vide si besoin
 
-            if (navigator.share) {
+            // 1. On vérifie SI on est à l'intérieur de votre application Android
+            if (typeof AndroidShare !== 'undefined') {
+                // On appelle directement la fonction Kotlin !
+                AndroidShare.share(shareTitle, shareText, shareUrl);
+            } 
+            // 2. Sinon, on est sur un navigateur classique (Chrome, Safari...)
+            else if (navigator.share) {
                 try {
                     await navigator.share({
                         title: shareTitle,
+                        text: shareText,
                         url: shareUrl
                     });
                     console.log('Partage réussi !');
                 } catch (err) {
                     console.error('Erreur lors du partage:', err);
                 }
-            } else {
-                // Fallback pour les vieux navigateurs de bureau
+            } 
+            // 3. Fallback pour les très vieux navigateurs sur ordinateur
+            else {
                 prompt("Copiez ce lien pour le partager :", shareUrl);
             }
         });
         </script>
+
 
     </div>
 </div>
