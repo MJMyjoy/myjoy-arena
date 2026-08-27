@@ -71,7 +71,7 @@
         document.getElementById('btn-partager').addEventListener('click', async () => {
             const shareUrl = "{{ request.build_absolute_uri }}";
             const shareTitle = "Découvrez cette page !"; 
-            const shareText = "Voici un lien intéressant :"; // Vous pouvez le laisser vide si besoin
+            const shareText = "Découvrez ce projet et rejoignez Myjoy Arena ! \n"; // Vous pouvez le laisser vide si besoin
 
             // 1. On vérifie SI on est à l'intérieur de votre application Android
             if (typeof AndroidShare !== 'undefined') {
