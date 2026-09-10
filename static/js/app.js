@@ -276,8 +276,11 @@ function reformulateError(errorMessage) {
                 msg = msg.replace('{type}', attrMatch[1]).replace('{attr}', attrMatch[2]);
             }
             
-            // Add the original error for reference
-            msg += '\n\n📝 Message original : ' + errorMessage.split('\n').pop();
+            // Add the original Python error name for reference
+            const errorTypeMatch = errorMessage.match(/([\w]+Error|[\w]+Exception|[\w]+Warning):\s*(.*)/);
+            if (errorTypeMatch) {
+                msg += '\n\n📝 Erreur Python : ' + errorTypeMatch[1] + (errorTypeMatch[2] ? ' — ' + errorTypeMatch[2].trim() : '');
+            }
             
             return msg;
         }
