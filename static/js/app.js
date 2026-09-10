@@ -21,15 +21,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ============================================
 // PYODIDE WEB WORKER — Interactive input()
-// Uses SharedArrayBuffer + Atomics so Python
-// can block on input() while the UI stays alive.
+// Re-execution approach: no SharedArrayBuffer.
+// When input() needs a value, worker stops and
+// asks main thread. User types, then code is
+// re-run with all collected inputs.
 // ============================================
 let pyWorker = null;
 let pyWorkerReady = false;
 let executionTimeoutId = null;
-let currentSignalBuffer = null;
-let currentDataBuffer = null;
-const EXECUTION_TIMEOUT = 30000; // 30s max between actions (generous for input waits)
+let collectedInputs = [];   // all input values collected so far
+let currentCode = '';        // the code being executed
+const EXECUTION_TIMEOUT = 15000; // 15s max per run
 
 function createWorker() {
     if (pyWorker) { try { pyWorker.terminate(); } catch(_) {} }
@@ -40,7 +42,14 @@ function createWorker() {
             pyWorkerReady = true;
             const statusEl = document.getElementById('pyodide-status');
             if (statusEl) statusEl.textContent = '✅ Python est prêt !';
+        } else if (e.data.type === 'error') {
+            const statusEl = document.getElementById('pyodide-status');
+            if (statusEl) statusEl.textContent = '❌ ' + (e.data.error || 'Erreur');
         }
+    };
+    pyWorker.onerror = function(e) {
+        const statusEl = document.getElementById('pyodide-status');
+        if (statusEl) statusEl.textContent = '❌ Erreur de chargement';
     };
     const statusEl = document.getElementById('pyodide-status');
     if (statusEl) statusEl.textContent = '⏳ Chargement de Python...';
@@ -53,86 +62,51 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function runPythonCode(code) {
+// Run code in the worker (returns a Promise)
+// This is called by executeCode and also re-called when an input is submitted
+function runInWorker(code, inputs) {
     return new Promise((resolve) => {
         if (!pyWorker) createWorker();
 
-        const outputArea = document.getElementById('output-area');
+        const timeoutId = setTimeout(() => {
+            pyWorker.terminate();
+            pyWorker = null;
+            pyWorkerReady = false;
+            resolve({
+                type: 'result',
+                success: false,
+                output: '',
+                error: 'TimeoutError: Ton code a mis trop de temps. Il contient probablement une boucle infinie ou un calcul trop long.'
+            });
+            createWorker();
+        }, EXECUTION_TIMEOUT);
 
-        // Create shared buffers for interactive input
-        const signalSAB = new SharedArrayBuffer(16); // 4 x Int32
-        const dataSAB = new SharedArrayBuffer(4096); // Up to 4KB input string
-        currentSignalBuffer = new Int32Array(signalSAB);
-        currentDataBuffer = new Uint8Array(dataSAB);
-
-        // Send buffers to the worker
-        pyWorker.postMessage({ type: 'init-buffers', signal: signalSAB, data: dataSAB });
-
-        // Timeout — resets each time we get activity (input request, partial output)
-        function resetTimeout() {
-            if (executionTimeoutId) clearTimeout(executionTimeoutId);
-            executionTimeoutId = setTimeout(() => {
-                pyWorker.terminate();
-                pyWorker = null;
-                pyWorkerReady = false;
-                currentSignalBuffer = null;
-                currentDataBuffer = null;
-                resolve({
-                    success: false,
-                    output: '',
-                    error: 'TimeoutError: Ton code a mis trop de temps. Il contient probablement une boucle infinie ou un calcul trop long.'
-                });
-                createWorker();
-            }, EXECUTION_TIMEOUT);
-        }
-        resetTimeout();
-
-        // Listen for messages from worker
         pyWorker.onmessage = function(e) {
-            if (e.data.type === 'result') {
-                // Code finished — append remaining output
-                clearTimeout(executionTimeoutId);
-                executionTimeoutId = null;
-                currentSignalBuffer = null;
-                currentDataBuffer = null;
-
-                if (e.data.success) {
-                    if (e.data.output) {
-                        appendToOutput(outputArea, escapeHtml(e.data.output));
-                    }
-                }
+            if (e.data.type === 'result' || e.data.type === 'input-needed') {
+                clearTimeout(timeoutId);
                 resolve(e.data);
-
-            } else if (e.data.type === 'input-request') {
-                // Python hit input() — show partial output + input field
-                resetTimeout(); // Don't timeout while user is typing
-                if (e.data.partialOutput) {
-                    appendToOutput(outputArea, escapeHtml(e.data.partialOutput));
-                }
-                showInteractiveInput(outputArea, e.data.prompt);
-
             } else if (e.data.type === 'ready') {
                 pyWorkerReady = true;
                 const statusEl = document.getElementById('pyodide-status');
                 if (statusEl) statusEl.textContent = '✅ Python est prêt !';
+            } else if (e.data.type === 'error') {
+                clearTimeout(timeoutId);
+                resolve({ type: 'result', success: false, output: '', error: e.data.error });
             }
         };
 
         pyWorker.onerror = function(e) {
-            clearTimeout(executionTimeoutId);
-            executionTimeoutId = null;
-            resolve({ success: false, output: '', error: e.message || 'Erreur inconnue dans le worker.' });
+            clearTimeout(timeoutId);
+            resolve({ type: 'result', success: false, output: '', error: e.message || 'Erreur inconnue.' });
         };
 
-        // Send code to the worker
-        pyWorker.postMessage({ type: 'run', code: code });
+        pyWorker.postMessage({ type: 'run', code: code, inputs: inputs });
     });
 }
 
 // Append text to the output terminal (preserving existing content)
 function appendToOutput(outputArea, htmlText) {
     if (!outputArea) return;
-    // Remove any "loading" or placeholder messages
     const loadingMsg = outputArea.querySelector('.output-message.loading');
     if (loadingMsg) loadingMsg.remove();
     const infoMsg = outputArea.querySelector('.output-message.info');
@@ -146,41 +120,33 @@ function appendToOutput(outputArea, htmlText) {
     }
 }
 
-// Show an interactive input field inside the output area
-function showInteractiveInput(outputArea, prompt) {
-    if (!outputArea) return;
-    const loadingMsg = outputArea.querySelector('.output-message.loading');
-    if (loadingMsg) loadingMsg.remove();
+// Show an interactive input field and return a Promise with the user's value
+function waitForInput(outputArea, prompt) {
+    return new Promise((resolve) => {
+        const loadingMsg = outputArea.querySelector('.output-message.loading');
+        if (loadingMsg) loadingMsg.remove();
 
-    const inputRow = document.createElement('div');
-    inputRow.className = 'interactive-input-row';
-    inputRow.innerHTML =
-        `<span class="input-prompt-text">${escapeHtml(prompt)}</span>` +
-        `<input type="text" class="interactive-input-field" placeholder="Tape ta réponse ici..." autofocus>`;
-    outputArea.appendChild(inputRow);
+        const inputRow = document.createElement('div');
+        inputRow.className = 'interactive-input-row';
+        inputRow.innerHTML =
+            `<span class="input-prompt-text">${escapeHtml(prompt)}</span>` +
+            `<input type="text" class="interactive-input-field" placeholder="Tape ta réponse ici..." autofocus>`;
+        outputArea.appendChild(inputRow);
 
-    const inputField = inputRow.querySelector('input');
-    inputField.focus();
+        const inputField = inputRow.querySelector('input');
+        inputField.focus();
 
-    inputField.addEventListener('keydown', function handler(evt) {
-        if (evt.key === 'Enter') {
-            evt.preventDefault();
-            const value = inputField.value;
-
-            // Disable the field and style it as submitted
-            inputField.disabled = true;
-            inputField.classList.add('submitted');
-            inputRow.classList.add('submitted');
-
-            // Write the value into the shared buffer
-            const encoded = new TextEncoder().encode(value);
-            currentDataBuffer.set(encoded);
-            Atomics.store(currentSignalBuffer, 1, encoded.length);
-            Atomics.store(currentSignalBuffer, 0, 1);
-            Atomics.notify(currentSignalBuffer, 0);
-
-            inputField.removeEventListener('keydown', handler);
-        }
+        inputField.addEventListener('keydown', function handler(evt) {
+            if (evt.key === 'Enter') {
+                evt.preventDefault();
+                const value = inputField.value;
+                inputField.disabled = true;
+                inputField.classList.add('submitted');
+                inputRow.classList.add('submitted');
+                inputField.removeEventListener('keydown', handler);
+                resolve(value);
+            }
+        });
     });
 }
 
@@ -192,8 +158,8 @@ function stopExecution() {
         pyWorker = null;
         pyWorkerReady = false;
     }
-    currentSignalBuffer = null;
-    currentDataBuffer = null;
+    collectedInputs = [];
+    currentCode = '';
     const outputArea = document.getElementById('output-area');
     if (outputArea) {
         appendToOutput(outputArea, '<span class="stop-message">🛑 Exécution interrompue.</span>');
@@ -380,40 +346,65 @@ async function executeCode() {
         return;
     }
     
-    // Clear output area and show loading + stop button
+    // Reset state
+    collectedInputs = [];
+    currentCode = code;
     outputArea.innerHTML = '<div class="output-message loading">⏳ Exécution en cours...</div>';
     if (runBtn) { runBtn.disabled = true; runBtn.textContent = '⏳ Exécution...'; }
     if (stopBtn) stopBtn.style.display = 'inline-block';
     
     try {
-        const result = await runPythonCode(code);
-        
-        if (result.success) {
-            // If no output was produced at all (no print, no input)
-            if (!result.output && !outputArea.querySelector('.terminal-output') && !outputArea.querySelector('.interactive-input-row')) {
-                appendToOutput(outputArea, '<span class="success-text">✅ Code exécuté avec succès ! (pas de sortie)</span>');
+        // Re-execution loop: run code, if input needed → ask user → re-run with inputs
+        let running = true;
+        while (running) {
+            const result = await runInWorker(currentCode, collectedInputs);
+
+            if (result.type === 'input-needed') {
+                // Show partial output (printed before input was reached)
+                if (result.partialOutput) {
+                    // On re-runs, clear previous output and show fresh
+                    outputArea.innerHTML = '';
+                    appendToOutput(outputArea, escapeHtml(result.partialOutput));
+                }
+                // Show interactive input field and wait for user
+                const value = await waitForInput(outputArea, result.prompt);
+                collectedInputs.push(value);
+                // Loop continues → re-run code with all collected inputs
+
+            } else {
+                // Code finished (success or error)
+                running = false;
+                // On final run, clear and show full output
+                outputArea.innerHTML = '';
+
+                if (result.success) {
+                    if (result.output) {
+                        appendToOutput(outputArea, escapeHtml(result.output));
+                    } else if (collectedInputs.length === 0) {
+                        appendToOutput(outputArea, '<span class="success-text">✅ Code exécuté avec succès ! (pas de sortie)</span>');
+                    }
+                    if (result.error) {
+                        appendToOutput(outputArea, `<span class="warning-text">⚠️ ${escapeHtml(result.error)}</span>`);
+                    }
+                    const nextBtn = document.getElementById('step3-next');
+                    if (nextBtn) nextBtn.disabled = false;
+                    window._lastOutput = result.output || '(aucune sortie)';
+                } else {
+                    if (result.output) {
+                        appendToOutput(outputArea, escapeHtml(result.output));
+                    }
+                    const friendlyError = reformulateError(result.error);
+                    appendToOutput(outputArea, `<span class="error-text">${escapeHtml(friendlyError).replace(/\n/g, '<br>')}</span>`);
+                    window._lastOutput = '';
+                }
             }
-            if (result.error) {
-                appendToOutput(outputArea, `<span class="warning-text">⚠️ ${escapeHtml(result.error)}</span>`);
-            }
-            // Enable next step if in create form
-            const nextBtn = document.getElementById('step3-next');
-            if (nextBtn) nextBtn.disabled = false;
-            // Store full output for saving
-            window._lastOutput = outputArea.textContent || '(aucune sortie)';
-        } else {
-            const friendlyError = reformulateError(result.error);
-            // If there was partial output before the error, keep it
-            if (result.output) {
-                appendToOutput(outputArea, escapeHtml(result.output));
-            }
-            appendToOutput(outputArea, `<span class="error-text">${escapeHtml(friendlyError).replace(/\n/g, '<br>')}</span>`);
-            window._lastOutput = '';
         }
     } catch (e) {
         const friendlyError = reformulateError(e.message || String(e));
         appendToOutput(outputArea, `<span class="error-text">${escapeHtml(friendlyError).replace(/\n/g, '<br>')}</span>`);
     } finally {
+        collectedInputs = [];
+        currentCode = '';
         if (runBtn) { runBtn.disabled = false; runBtn.textContent = '▶️ Exécuter le code'; }
         if (stopBtn) stopBtn.style.display = 'none';
     }

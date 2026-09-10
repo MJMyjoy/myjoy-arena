@@ -1,13 +1,12 @@
 // ============================================
 // PYODIDE WEB WORKER — Interactive input()
-// Executes Python code in a separate thread.
-// Uses SharedArrayBuffer + Atomics to pause
-// execution when input() is called and wait
-// for the user to type a value in the UI.
+// Re-execution approach: when input() is hit
+// without a pre-filled value, raises a special
+// exception. Main thread catches it, shows an
+// input field, then re-runs with all collected
+// inputs. No SharedArrayBuffer needed.
 // ============================================
 let pyodide = null;
-let signalBuffer = null;  // Int32Array — [0]=signal, [1]=data length
-let dataBuffer = null;    // Uint8Array — the actual input string bytes
 
 importScripts('https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js');
 
@@ -17,45 +16,10 @@ async function initPyodide() {
     return pyodide;
 }
 
-// Called from Python when input() is used
-function jsRequestInput(prompt) {
-    // 1. Flush current stdout and send it + the prompt to main thread
-    let partialOutput = '';
-    try {
-        partialOutput = pyodide.runPython('sys.stdout.getvalue()');
-        pyodide.runPython('sys.stdout = __import__("io").StringIO()');
-    } catch (_) {}
-
-    self.postMessage({
-        type: 'input-request',
-        prompt: prompt || '',
-        partialOutput: partialOutput
-    });
-
-    // 2. Block this thread until main thread provides the value
-    Atomics.store(signalBuffer, 0, 0);
-    Atomics.wait(signalBuffer, 0, 0);
-
-    // 3. Read the input value from the shared data buffer
-    const length = Atomics.load(signalBuffer, 1);
-    const bytes = new Uint8Array(dataBuffer.buffer, 0, length);
-    const value = new TextDecoder().decode(bytes);
-
-    return value;
-}
-
 self.onmessage = async function(event) {
-    const { type } = event.data;
-
-    // Receive shared buffers from main thread
-    if (type === 'init-buffers') {
-        signalBuffer = new Int32Array(event.data.signal);
-        dataBuffer = new Uint8Array(event.data.data);
-        return;
-    }
+    const { type, code, inputs } = event.data;
 
     if (type === 'run') {
-        const { code } = event.data;
         try {
             const py = await initPyodide();
 
@@ -67,22 +31,37 @@ self.onmessage = async function(event) {
                 'sys.stderr = StringIO()',
             ].join('\n'));
 
-            // Register the JS input function so Python can call it
-            py.globals.set('_js_request_input', jsRequestInput);
-
-            // Override builtins.input with our interactive version
+            // Setup custom input with pre-filled values
+            // If values run out, raise a special marker exception
             py.runPython([
                 'import builtins',
-                'def _interactive_input(prompt=""):',
-                '    val = _js_request_input(str(prompt))',
-                '    print(str(prompt) + val)',
-                '    return val',
-                'builtins.input = _interactive_input',
+                '_input_values = []',
+                '_input_index = 0',
+                'class _InputNeeded(Exception):',
+                '    def __init__(self, prompt):',
+                '        self.prompt = prompt',
+                '        super().__init__("__INPUT_NEEDED__:" + str(prompt))',
+                'def _custom_input(prompt=""):',
+                '    global _input_index',
+                '    if _input_index < len(_input_values):',
+                '        val = _input_values[_input_index]',
+                '        _input_index += 1',
+                '        print(str(prompt) + val)',
+                '        return val',
+                '    raise _InputNeeded(prompt)',
+                'builtins.input = _custom_input',
             ].join('\n'));
+
+            // Set pre-filled input values
+            if (inputs && inputs.length > 0) {
+                py.runPython('_input_values = ' + JSON.stringify(inputs) + '\n_input_index = 0');
+            } else {
+                py.runPython('_input_values = []\n_input_index = 0');
+            }
 
             // Clear global namespace to prevent variable leaking between runs
             py.runPython([
-                '_to_keep = {"__name__", "__doc__", "__package__", "__loader__", "__spec__", "__annotations__", "__builtins__", "sys", "StringIO", "builtins", "_js_request_input", "_interactive_input"}',
+                '_to_keep = {"__name__", "__doc__", "__package__", "__loader__", "__spec__", "__annotations__", "__builtins__", "sys", "StringIO", "builtins", "_input_values", "_input_index", "_custom_input", "_InputNeeded"}',
                 'for _k in list(globals().keys()):',
                 '    if _k not in _to_keep and not _k.startswith("_"):',
                 '        try:',
@@ -94,29 +73,43 @@ self.onmessage = async function(event) {
             // Execute user code
             py.runPython(code);
 
-            // Get remaining output
+            // Success — get output
             const stdout = py.runPython('sys.stdout.getvalue()');
             const stderr = py.runPython('sys.stderr.getvalue()');
             self.postMessage({ type: 'result', success: true, output: stdout, error: stderr });
 
         } catch (e) {
-            let stderr = '';
-            try {
-                if (pyodide) stderr = pyodide.runPython('sys.stderr.getvalue()');
-            } catch (_) {}
+            const errorMsg = e.message || String(e);
 
-            // Get any partial stdout that was printed before the error
-            let partialOutput = '';
-            try {
-                if (pyodide) partialOutput = pyodide.runPython('sys.stdout.getvalue()');
-            } catch (_) {}
-
-            self.postMessage({
-                type: 'result',
-                success: false,
-                output: partialOutput,
-                error: e.message || stderr || String(e)
-            });
+            // Check if it's our special "input needed" marker
+            if (errorMsg.includes('__INPUT_NEEDED__:')) {
+                const prompt = errorMsg.split('__INPUT_NEEDED__:').pop();
+                let partialOutput = '';
+                try {
+                    partialOutput = pyodide.runPython('sys.stdout.getvalue()');
+                } catch (_) {}
+                self.postMessage({
+                    type: 'input-needed',
+                    prompt: prompt,
+                    partialOutput: partialOutput
+                });
+            } else {
+                // Real error
+                let stderr = '';
+                try {
+                    if (pyodide) stderr = pyodide.runPython('sys.stderr.getvalue()');
+                } catch (_) {}
+                let partialOutput = '';
+                try {
+                    if (pyodide) partialOutput = pyodide.runPython('sys.stdout.getvalue()');
+                } catch (_) {}
+                self.postMessage({
+                    type: 'result',
+                    success: false,
+                    output: partialOutput,
+                    error: errorMsg || stderr
+                });
+            }
         }
     }
 };
