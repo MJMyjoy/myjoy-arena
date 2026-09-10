@@ -318,3 +318,86 @@ footer { border-top: 1px solid rgba(255,255,255,0.1); padding: 2rem; text-align:
     70% { box-shadow: 0 0 0 10px rgba(255, 69, 58, 0); }
     100% { box-shadow: 0 0 0 0 rgba(255, 69, 58, 0); }
 }
+
+/* ============================================
+   INTERACTIVE INPUT & TERMINAL OUTPUT
+   ============================================ */
+
+/* Terminal-style output blocks */
+.terminal-output {
+    margin: 0;
+    padding: 4px 0;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.9rem;
+    color: #e0e0e0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+    background: none;
+    border: none;
+}
+
+/* Interactive input row (prompt + field) */
+.interactive-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+    border-left: 3px solid var(--accent-color);
+    padding-left: 10px;
+    margin: 4px 0;
+    animation: fadeInInput 0.3s ease;
+}
+
+.interactive-input-row.submitted {
+    border-left-color: #555;
+    opacity: 0.7;
+}
+
+@keyframes fadeInInput {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.input-prompt-text {
+    font-family: 'Fira Code', monospace;
+    font-size: 0.9rem;
+    color: var(--accent-color);
+    white-space: pre;
+    flex-shrink: 0;
+}
+
+.interactive-input-field {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--accent-color);
+    border-radius: 4px;
+    color: #fff;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.9rem;
+    padding: 6px 10px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.interactive-input-field:focus {
+    border-color: var(--success-color);
+    box-shadow: 0 0 8px rgba(0, 212, 170, 0.3);
+}
+
+.interactive-input-field.submitted {
+    border-color: #555;
+    color: var(--success-color);
+    background: rgba(0, 212, 170, 0.05);
+}
+
+.interactive-input-field::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+    font-style: italic;
+}
+
+/* Colored text spans in terminal */
+.success-text { color: var(--success-color); }
+.error-text { color: var(--error-color); display: block; padding: 8px 0; line-height: 1.6; }
+.warning-text { color: #ffc107; display: block; padding: 4px 0; }
+.stop-message { color: #ffc107; font-weight: 500; }

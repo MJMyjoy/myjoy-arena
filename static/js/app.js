@@ -20,13 +20,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================
-// PYODIDE WEB WORKER INTEGRATION
-// Runs Python in a separate thread to prevent
-// infinite loops from freezing the browser.
+// PYODIDE WEB WORKER — Interactive input()
+// Uses SharedArrayBuffer + Atomics so Python
+// can block on input() while the UI stays alive.
 // ============================================
 let pyWorker = null;
 let pyWorkerReady = false;
-const EXECUTION_TIMEOUT = 10000; // 10 seconds max
+let executionTimeoutId = null;
+let currentSignalBuffer = null;
+let currentDataBuffer = null;
+const EXECUTION_TIMEOUT = 30000; // 30s max between actions (generous for input waits)
 
 function createWorker() {
     if (pyWorker) { try { pyWorker.terminate(); } catch(_) {} }
@@ -54,28 +57,60 @@ function runPythonCode(code) {
     return new Promise((resolve) => {
         if (!pyWorker) createWorker();
 
-        const inputArea = document.getElementById('input-values');
-        const inputs = (inputArea && inputArea.value.trim()) ? inputArea.value.split('\n') : [];
+        const outputArea = document.getElementById('output-area');
 
-        // Set up timeout to kill the worker if it takes too long
-        const timeoutId = setTimeout(() => {
-            pyWorker.terminate();
-            pyWorker = null;
-            pyWorkerReady = false;
-            resolve({
-                success: false,
-                output: '',
-                error: 'TimeoutError: Ton code a mis plus de 10 secondes. Il contient probablement une boucle infinie ou un calcul trop long.'
-            });
-            // Recreate the worker for next execution
-            createWorker();
-        }, EXECUTION_TIMEOUT);
+        // Create shared buffers for interactive input
+        const signalSAB = new SharedArrayBuffer(16); // 4 x Int32
+        const dataSAB = new SharedArrayBuffer(4096); // Up to 4KB input string
+        currentSignalBuffer = new Int32Array(signalSAB);
+        currentDataBuffer = new Uint8Array(dataSAB);
 
-        // Listen for result from worker
+        // Send buffers to the worker
+        pyWorker.postMessage({ type: 'init-buffers', signal: signalSAB, data: dataSAB });
+
+        // Timeout — resets each time we get activity (input request, partial output)
+        function resetTimeout() {
+            if (executionTimeoutId) clearTimeout(executionTimeoutId);
+            executionTimeoutId = setTimeout(() => {
+                pyWorker.terminate();
+                pyWorker = null;
+                pyWorkerReady = false;
+                currentSignalBuffer = null;
+                currentDataBuffer = null;
+                resolve({
+                    success: false,
+                    output: '',
+                    error: 'TimeoutError: Ton code a mis trop de temps. Il contient probablement une boucle infinie ou un calcul trop long.'
+                });
+                createWorker();
+            }, EXECUTION_TIMEOUT);
+        }
+        resetTimeout();
+
+        // Listen for messages from worker
         pyWorker.onmessage = function(e) {
             if (e.data.type === 'result') {
-                clearTimeout(timeoutId);
+                // Code finished — append remaining output
+                clearTimeout(executionTimeoutId);
+                executionTimeoutId = null;
+                currentSignalBuffer = null;
+                currentDataBuffer = null;
+
+                if (e.data.success) {
+                    if (e.data.output) {
+                        appendToOutput(outputArea, escapeHtml(e.data.output));
+                    }
+                }
                 resolve(e.data);
+
+            } else if (e.data.type === 'input-request') {
+                // Python hit input() — show partial output + input field
+                resetTimeout(); // Don't timeout while user is typing
+                if (e.data.partialOutput) {
+                    appendToOutput(outputArea, escapeHtml(e.data.partialOutput));
+                }
+                showInteractiveInput(outputArea, e.data.prompt);
+
             } else if (e.data.type === 'ready') {
                 pyWorkerReady = true;
                 const statusEl = document.getElementById('pyodide-status');
@@ -84,31 +119,89 @@ function runPythonCode(code) {
         };
 
         pyWorker.onerror = function(e) {
-            clearTimeout(timeoutId);
+            clearTimeout(executionTimeoutId);
+            executionTimeoutId = null;
             resolve({ success: false, output: '', error: e.message || 'Erreur inconnue dans le worker.' });
         };
 
         // Send code to the worker
-        pyWorker.postMessage({ type: 'run', code: code, inputs: inputs });
+        pyWorker.postMessage({ type: 'run', code: code });
+    });
+}
+
+// Append text to the output terminal (preserving existing content)
+function appendToOutput(outputArea, htmlText) {
+    if (!outputArea) return;
+    // Remove any "loading" or placeholder messages
+    const loadingMsg = outputArea.querySelector('.output-message.loading');
+    if (loadingMsg) loadingMsg.remove();
+    const infoMsg = outputArea.querySelector('.output-message.info');
+    if (infoMsg) infoMsg.remove();
+
+    if (htmlText.trim()) {
+        const pre = document.createElement('pre');
+        pre.className = 'terminal-output';
+        pre.innerHTML = htmlText;
+        outputArea.appendChild(pre);
+    }
+}
+
+// Show an interactive input field inside the output area
+function showInteractiveInput(outputArea, prompt) {
+    if (!outputArea) return;
+    const loadingMsg = outputArea.querySelector('.output-message.loading');
+    if (loadingMsg) loadingMsg.remove();
+
+    const inputRow = document.createElement('div');
+    inputRow.className = 'interactive-input-row';
+    inputRow.innerHTML =
+        `<span class="input-prompt-text">${escapeHtml(prompt)}</span>` +
+        `<input type="text" class="interactive-input-field" placeholder="Tape ta réponse ici..." autofocus>`;
+    outputArea.appendChild(inputRow);
+
+    const inputField = inputRow.querySelector('input');
+    inputField.focus();
+
+    inputField.addEventListener('keydown', function handler(evt) {
+        if (evt.key === 'Enter') {
+            evt.preventDefault();
+            const value = inputField.value;
+
+            // Disable the field and style it as submitted
+            inputField.disabled = true;
+            inputField.classList.add('submitted');
+            inputRow.classList.add('submitted');
+
+            // Write the value into the shared buffer
+            const encoded = new TextEncoder().encode(value);
+            currentDataBuffer.set(encoded);
+            Atomics.store(currentSignalBuffer, 1, encoded.length);
+            Atomics.store(currentSignalBuffer, 0, 1);
+            Atomics.notify(currentSignalBuffer, 0);
+
+            inputField.removeEventListener('keydown', handler);
+        }
     });
 }
 
 // Stop button handler — kills the worker
 function stopExecution() {
+    if (executionTimeoutId) { clearTimeout(executionTimeoutId); executionTimeoutId = null; }
     if (pyWorker) {
         pyWorker.terminate();
         pyWorker = null;
         pyWorkerReady = false;
     }
+    currentSignalBuffer = null;
+    currentDataBuffer = null;
     const outputArea = document.getElementById('output-area');
     if (outputArea) {
-        outputArea.innerHTML = '<div class="output-message warning">🛑 Exécution interrompue par l\'utilisateur.</div>';
+        appendToOutput(outputArea, '<span class="stop-message">🛑 Exécution interrompue.</span>');
     }
     const runBtn = document.getElementById('run-btn');
     const stopBtn = document.getElementById('stop-btn');
     if (runBtn) { runBtn.disabled = false; runBtn.textContent = '▶️ Exécuter le code'; }
     if (stopBtn) stopBtn.style.display = 'none';
-    // Recreate worker for next run
     createWorker();
 }
 
@@ -287,8 +380,8 @@ async function executeCode() {
         return;
     }
     
-    // Show loading + stop button
-    outputArea.innerHTML = '<div class="output-message loading">⏳ Exécution en cours... (max 10 secondes)</div>';
+    // Clear output area and show loading + stop button
+    outputArea.innerHTML = '<div class="output-message loading">⏳ Exécution en cours...</div>';
     if (runBtn) { runBtn.disabled = true; runBtn.textContent = '⏳ Exécution...'; }
     if (stopBtn) stopBtn.style.display = 'inline-block';
     
@@ -296,29 +389,30 @@ async function executeCode() {
         const result = await runPythonCode(code);
         
         if (result.success) {
-            let html = '';
-            if (result.output) {
-                html += `<div class="output-message success"><pre>${escapeHtml(result.output)}</pre></div>`;
-            } else {
-                html += '<div class="output-message success">✅ Code exécuté avec succès ! (pas de sortie)</div>';
+            // If no output was produced at all (no print, no input)
+            if (!result.output && !outputArea.querySelector('.terminal-output') && !outputArea.querySelector('.interactive-input-row')) {
+                appendToOutput(outputArea, '<span class="success-text">✅ Code exécuté avec succès ! (pas de sortie)</span>');
             }
             if (result.error) {
-                html += `<div class="output-message warning"><pre>${escapeHtml(result.error)}</pre></div>`;
+                appendToOutput(outputArea, `<span class="warning-text">⚠️ ${escapeHtml(result.error)}</span>`);
             }
-            outputArea.innerHTML = html;
             // Enable next step if in create form
             const nextBtn = document.getElementById('step3-next');
             if (nextBtn) nextBtn.disabled = false;
-            // Store output
-            window._lastOutput = result.output || '(aucune sortie)';
+            // Store full output for saving
+            window._lastOutput = outputArea.textContent || '(aucune sortie)';
         } else {
             const friendlyError = reformulateError(result.error);
-            outputArea.innerHTML = `<div class="output-message error"><div class="error-friendly">${escapeHtml(friendlyError).replace(/\n/g, '<br>')}</div></div>`;
+            // If there was partial output before the error, keep it
+            if (result.output) {
+                appendToOutput(outputArea, escapeHtml(result.output));
+            }
+            appendToOutput(outputArea, `<span class="error-text">${escapeHtml(friendlyError).replace(/\n/g, '<br>')}</span>`);
             window._lastOutput = '';
         }
     } catch (e) {
         const friendlyError = reformulateError(e.message || String(e));
-        outputArea.innerHTML = `<div class="output-message error"><div class="error-friendly">${escapeHtml(friendlyError).replace(/\n/g, '<br>')}</div></div>`;
+        appendToOutput(outputArea, `<span class="error-text">${escapeHtml(friendlyError).replace(/\n/g, '<br>')}</span>`);
     } finally {
         if (runBtn) { runBtn.disabled = false; runBtn.textContent = '▶️ Exécuter le code'; }
         if (stopBtn) stopBtn.style.display = 'none';
